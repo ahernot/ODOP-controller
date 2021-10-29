@@ -16,6 +16,12 @@
 #define Z_LIM       11
 
 
+#define DEG_PER_STEP 1.8
+#define DISTANCE_PER_STEP 4
+#define MICROSTEP 8
+#define REDUCTION_RATIO 27.
+
+
 boolean motorsDisabled;
 boolean isCalibrated; // store calibration bool value
 
@@ -28,7 +34,7 @@ void setup() {
   
   Serial.begin(9600);
 
-  stepperX.setMaxSpeed(100); // 0-10000, good value 100
+  stepperX.setMaxSpeed(500); // 0-10000, good value 100 // s1000a100
   stepperX .setAcceleration(500); // 0-5000, good value 200
 
   stepperY.setMaxSpeed(100); // 0-10000, good value 100
@@ -147,15 +153,22 @@ void loop() {
   }
 
   // Move (absolute motion)
-  if (readString.startsWith("move ")) {
-      long a = readString.substring(5).toInt();
+  if (command.startsWith("move")) { // "move "
+      //long a = command.substring(5).toInt();
       // TODO
+
+      stepperX.move(10000);
+      stepperX.runToPosition();
   }
 
   // Angle (relative motion)
-  if (readString.startsWith("angle ")) {
-    float a = readString.substring(5).toFloat();
-    // TODO
+  if (command.startsWith("angle ")) {
+    float a = command.substring(5).toFloat();
+
+    float stepsTrue = a / DEG_PER_STEP * MICROSTEP * DISTANCE_PER_STEP * REDUCTION_RATIO;
+    stepperX.move(stepsTrue);
+    stepperX.runToPosition();
+    Serial.println("finished");
   }
   
  
