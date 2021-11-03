@@ -19,12 +19,19 @@
 #define STATUS_VERBOSE true
 #define HELP_VERBOSE true
 
+// X-axis parameters
 #define X_DEG_PER_STEP 1.8
 #define X_DISTANCE_PER_STEP 4
 #define X_MICROSTEP 8
 #define X_REDUCTION_RATIO 27.
 
+// Y-axis parameters
+#define Y_DEG_PER_STEP 1.8
+#define Y_DISTANCE_PER_STEP 4
+#define Y_MICROSTEP 8
+#define Y_REDUCTION_RATIO 27.
 
+// Motor parameters
 #define X_MAX_SPEED 500
 #define X_ACCELERATION 500
 #define Y_MAX_SPEED 500
@@ -42,11 +49,11 @@ void setup() {
   
   Serial.begin(9600);
 
-  stepperX.setMaxSpeed(500); // 0-10000, good value 100 // s1000a100 too much
-  stepperX .setAcceleration(500); // 0-5000, good value 200
+  stepperX.setMaxSpeed(X_MAX_SPEED); // 0-10000, good value 100 // s1000a100 too much
+  stepperX .setAcceleration(X_ACCELERATION); // 0-5000, good value 200
 
-  stepperY.setMaxSpeed(100); // 0-10000, good value 100
-  stepperY .setAcceleration(500); // 0-5000, good value 200
+  stepperY.setMaxSpeed(Y_MAX_SPEED); // 0-10000, good value 100
+  stepperY .setAcceleration(Y_ACCELERATION); // 0-5000, good value 200
 
 }
 
@@ -90,7 +97,7 @@ void calibrate (int maxIter) {
 
 
 
-void getStatus () {
+void printStatus () {
 
   if (motorsDisabled) {
     Serial.println("Motors are disabled");
@@ -184,7 +191,7 @@ void loop() {
   // ================================
   // Status
   if (command.startsWith("status")) {
-    getStatus();
+    printStatus();
   }
 
 
@@ -234,8 +241,9 @@ void loop() {
 
     // Process command (y)
     else if (subcommand.startsWith("y ") {
+
       // Calculate steps
-      float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+      float stepsTrue = a / Y_DEG_PER_STEP * Y_MICROSTEP * Y_DISTANCE_PER_STEP * Y_REDUCTION_RATIO;
 
       // Run command
       stepperY.move(stepsTrue);
@@ -253,14 +261,19 @@ void loop() {
   }
   
  
-  // Reset command
-  if (command != "") {
-    command = ""; 
-  }
+  
 
   else {
     printStatus("unknown_command", "\"" + command + "\"");
     printHelp("Available commands: angle, move");
+  }
+
+
+
+  // ================================
+  // Reset command variable
+  if (command != "") {
+    command = ""; 
   }
 
   delay(5000);
