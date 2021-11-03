@@ -66,6 +66,7 @@ void setup() {
 
 
 
+// USE ONLY FOR CALIBRATION (in the dark)
 //global variables:
 int xDirection = 1;
 boolean xLimMax = false;
@@ -89,10 +90,17 @@ void updateLimits () {
   }
 }
 
+boolean isCalibrated = false;
 /*
+ * FOR UNCALIBRATED DEVICE ONLY (isCalibrated == false)
  * before every movement: update xDirection
  * during every movement / every movement%10: call updateLimits()
+ * 
+ * FOR CALIBRATED DEVICE (isCalibrated == true)
+ * digitalRead(X_LIM) == 0 && signe de la position absolue
  */
+
+
 
 void printStatus () {
 
