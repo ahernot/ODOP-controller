@@ -45,6 +45,11 @@ boolean motorsDisabled;
 boolean isCalibrated = false; // store calibration bool value
 
 
+// Only used for uncalibrated motion
+boolean xLimMin = false;
+boolean xLimMax = false;
+
+
 AccelStepper stepperX(4, X_STP, X_DIR);
 AccelStepper stepperY(4, Y_STP, Y_DIR);
 String command = ""; 
@@ -63,41 +68,6 @@ void setup() {
 
 }
 
-
-
-
-// USE ONLY FOR CALIBRATION (in the dark)
-//global variables:
-int xDirection = 1;
-boolean xLimMax = false;
-boolean xLimMin  = false;
-
-void updateLimits () {
-  if (digitalRead(X_LIM) == 0) {
-    if (xDirection == 1) {
-      xLimMax = true;
-      xLimMin = false;
-    }
-    else {
-      xLimMax = false;
-      xLimMin = true;
-    }
-  }
-  
-  else {
-    xLimMax = false;
-    xLimMin = false;
-  }
-}
-
-/*
- * FOR UNCALIBRATED DEVICE ONLY (isCalibrated == false)
- * before every movement: update xDirection
- * during every movement / every movement%10: call updateLimits()
- * 
- * FOR CALIBRATED DEVICE (isCalibrated == true)
- * digitalRead(X_LIM) == 0 && signe de la position absolue
- */
 
 
 
@@ -162,10 +132,22 @@ void printHelp (String helpMessage) {
 
 
 
+void updateLimits () {
+  if (digitalRead(X_LIM) == 0) {
+    if (stepperX.distanceToGo() > 0) {
+      xLimMin = false; xLimMax = true;
+    }
+    else if (stepperX.distanceToGo() < 0) {
+      xLimMin = true; xLimMax = false;
+    }
+    else {
+      xLimMin = false; xLimMax = false;
+    }
+  }
+}
 
 
 void moveRelative (String command) {
-  Serial.println("RUNNING: " + command);
   
   // Flags
   boolean status_ = true;  // success (default value)
@@ -173,34 +155,67 @@ void moveRelative (String command) {
 
   // Read axis and value
   String subcommand = command.substring(6);
-  float a = command.substring(8).toFloat();
-
+  float commandVal = command.substring(8).toFloat();
 
   // Process command (x)
   if (subcommand.startsWith("x ")) {
+    
+    float stepsTrue = commandVal / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
 
-    // Calculate steps
-    float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
-
-    // Run command
+    // Give order
     stepperX.move(stepsTrue);
-    while (stepperX.distanceToGo() > 0) {
-      //Serial.println(stepperX.distanceToGo() );
-      stepperX.run();        
-      if (digitalRead(X_LIM) == 0) {
-        stepperX.move(0.);  // Reset distanceToGo
+
+    int itersUnchecked = 1024;  // Number of consecutive run commands without end stop switch check
+    // Run command
+    while (stepperX.distanceToGo() != 0) {
+      
+      for (int i=0; i < itersUnchecked; i ++) {
+        stepperX.run();
+        if (stepperX.distanceToGo() == 0) { break; }
+      }
+      boolean requestStop = false;
+
+      // Check end stop switch
+      if (isCalibrated == true) {
+        if (digitalRead(X_LIM) == 0) {
+          if (stepperX.currentPosition() >= 40 && stepperX.distanceToGo() > 0) {  // +90 and increasing
+              requestStop = true;
+          }
+          else if (stepperX.currentPosition() <= 40 && stepperX.distanceToGo() < 0) {  // -90 and decreasing
+              requestStop = true;
+          }
+        }
+      }
+      else if (isCalibrated == false) {
         
+        // update limits
+        updateLimits();
+
+        // update xLimMin = false; xLimMax = true; ??
+        if (xLimMax == true && stepperX.distanceToGo() > 0) {  // max and increasing
+          Serial.println("max and increasing, stopping");
+          requestStop = true;
+        }
+        else if (xLimMin == true && stepperX.distanceToGo() < 0) {  // min and decreasing
+          Serial.println("min and decreasing, stopping");
+          requestStop = true;
+        }
+      }
+
+      // Process stop request
+      if (requestStop == true) {
+        stepperX.move(0.);  // Reset distanceToGo
         printStatusStr("angle_x", "limit reached");  // Print status
+        
         statusMessage = true;  // sent
         status_ = false;
         break;
-      }  
+      }
     }
 
     // Print status
     if (statusMessage == false) {
-      //printStatusBool("angle_x", status_);
-      printStatusStr("angle_x", command); //temporary
+      printStatusBool("angle_x", status_);
       statusMessage = true;
     }
   }
@@ -209,7 +224,7 @@ void moveRelative (String command) {
   else if (subcommand.startsWith("y ")) {
 
     // Calculate steps
-    float stepsTrue = a / Y_DEG_PER_STEP * Y_MICROSTEP * Y_DISTANCE_PER_STEP * Y_REDUCTION_RATIO;
+    float stepsTrue = commandVal / Y_DEG_PER_STEP * Y_MICROSTEP * Y_DISTANCE_PER_STEP * Y_REDUCTION_RATIO;
 
     // Run command
     stepperY.move(stepsTrue);
@@ -237,7 +252,8 @@ void moveRelative (String command) {
 int i = 0;
 void loop() {
 
-  Serial.println(); Serial.println("========== NEW LOOP ==========");
+  Serial.println(); Serial.println("========== NEW LOOP =========="); Serial.println("isCalibrated: " + String(isCalibrated));
+  Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
    
   // ================================
   // Read messages from Serial
@@ -248,12 +264,15 @@ void loop() {
     command += c;  // Build the string command
   }
 
+  if (command != "") {
+    Serial.println("Processing command \"" + command + "\"");
+  }
 
   // ================================
   // Move to estimated zero position
   if (command.startsWith("estimate_zero")) {    
-    moveRelative("angle x 90");
-    delay(100);
+    moveRelative("angle x -90");
+    delay(1000);
     moveRelative("angle x 15");
 
     if (digitalRead(X_LIM) != 0) {
@@ -325,6 +344,6 @@ void loop() {
     command = ""; 
   }
 
-  delay(5000);
+  delay(2000);
   i++;
 }
