@@ -16,6 +16,9 @@
 #define Z_LIM       11
 
 
+#define STATUS_VERBOSE true
+#define HELP_VERBOSE true
+
 #define X_DEG_PER_STEP 1.8
 #define X_DISTANCE_PER_STEP 4
 #define X_MICROSTEP 8
@@ -126,16 +129,26 @@ void getStatus () {
 
 
 
-void updateStatus (String command, boolean status_) {
-  if (status == true) {
-    Serial.println(command + ": success");
-  }
-  else {
-    Serial.println(command + ": failure");
+void printStatus (String command, boolean status_) {
+  if (STATUS_VERBOSE == true) {
+    if (status == true) {
+      Serial.println(command + ": success");
+    }
+    else {
+      Serial.println(command + ": failure");
+    }
   }
 }
-
-
+void printStatus (String command, String message) {
+  if (STATUS_VERBOSE == true) {
+    Serial.println(command + ": " + message);
+  }
+}
+void printHelp (String helpMessage) {
+  if (HELP_VERBOSE == true) {
+    Serial.println("    " + helpMessage);
+  }
+}
 
 
 
@@ -160,19 +173,22 @@ void loop() {
   
 
 
+  // ================================
   // Calibration
   if (command.startsWith("calibrate")) {
     calibrate(2000);
     isCalibrated = true;
   }
 
+
+  // ================================
   // Status
   if (command.startsWith("status")) {
     getStatus();
   }
 
 
-  // -------------------------------- TODO
+  // ================================ TODO
   // Move (absolute motion)
   if (command.startsWith("move ")) {
 
@@ -194,9 +210,9 @@ void loop() {
 
 
 
-  // --------------------------------
+  // ================================
   // Angle (relative motion)
-  if (command.startsWith("angle ")) {
+  else if (command.startsWith("angle ")) {
 
     // Read axis and value
     String subcommand = command.substring(5)
@@ -204,20 +220,35 @@ void loop() {
 
     // Process command (x)
     if (subcommand.startsWith("x ") {
+
+      // Calculate steps
       float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+
+      // Run command
       stepperX.move(stepsTrue);
       stepperX.runToPosition();
-      Serial.println("finished");
 
-      // updateStatus("angle_x", true, 
+      // Print status
+      printStatus("angle_x", true);
     }
 
     // Process command (y)
     else if (subcommand.startsWith("y ") {
+      // Calculate steps
       float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+
+      // Run command
       stepperY.move(stepsTrue);
       stepperY.runToPosition();
-      Serial.println("finished");
+
+      // Print status
+      printStatus("angle_y", true);
+    }
+
+    // Unknown subcommand
+    else {
+      printStatus("unknown_command", "\"" + command + "\"");
+      printHelp("Usage: \"angle [axis:x,y] [value]\"");
     }
   }
   
@@ -227,6 +258,10 @@ void loop() {
     command = ""; 
   }
 
+  else {
+    printStatus("unknown_command", "\"" + command + "\"");
+    printHelp("Available commands: angle, move");
+  }
 
   delay(5000);
   i++;
