@@ -53,6 +53,8 @@ void setup() {
   
   Serial.begin(9600);
 
+  pinMode (X_LIM, INPUT);
+
   stepperX.setMaxSpeed(X_MAX_SPEED); // 0-10000, good value 100 // s1000a100 too much
   stepperX .setAcceleration(X_ACCELERATION); // 0-5000, good value 200
 
@@ -62,44 +64,35 @@ void setup() {
 }
 
 
-// Use byte?
-int limCheck () {
-  int xLim = digitalRead (X_LIM);
-  return xLim;
-}
 
 
+//global variables:
+int xDirection = 1;
+boolean xLimMax = false;
+boolean xLimMin  = false;
 
-// Calibration function (run on startup)
-void calibrate (int maxIter) {
-  
-  int calStep = 24; // 3 steps
-  int iter = 0;
-  int xLim = limCheck();
-  Serial.println(xLim);
-  
-  while (xLim != 0) {
-    Serial.println(stepperX.currentPosition());
-    stepperX.move(calStep);
-    stepperX.run();
-    xLim = limCheck();
-
-    if (iter > maxIter) { break; }
-    iter ++;
-  }
-
-  if (iter <= maxIter) {
-    Serial.println("motion range start found");
-    // Save angle now, equate to ANGLE_MIN_DEG
-    
-  } else {
-    Serial.println("ERROR: exceeded iterations");
+void updateLimits () {
+  if (digitalRead(X_LIM) == 0) {
+    if (xDirection == 1) {
+      xLimMax = true;
+      xLimMin = false;
+    }
+    else {
+      xLimMax = false;
+      xLimMin = true;
+    }
   }
   
+  else {
+    xLimMax = false;
+    xLimMin = false;
+  }
 }
 
-
-
+/*
+ * before every movement: update xDirection
+ * during every movement / every movement%10: call updateLimits()
+ */
 
 void printStatus () {
 
@@ -139,10 +132,9 @@ void printStatus () {
 }
 
 
-
-void printStatus (String command, boolean status_) {
+void printStatusBool (String command, boolean status_) {
   if (STATUS_VERBOSE == true) {
-    if (status == true) {
+    if (status_ == true) {
       Serial.println(command + ": success");
     }
     else {
@@ -150,7 +142,7 @@ void printStatus (String command, boolean status_) {
     }
   }
 }
-void printStatus (String command, String message) {
+void printStatusStr (String command, String message) {
   if (STATUS_VERBOSE == true) {
     Serial.println(command + ": " + message);
   }
@@ -163,32 +155,113 @@ void printHelp (String helpMessage) {
 
 
 
+
+
+void moveRelative (String command) {
+  Serial.println("RUNNING: " + command);
+  
+  // Flags
+  boolean status_ = true;  // success (default value)
+  boolean statusMessage = false;  // no status message sent
+
+  // Read axis and value
+  String subcommand = command.substring(6);
+  float a = command.substring(8).toFloat();
+
+
+  // Process command (x)
+  if (subcommand.startsWith("x ")) {
+
+    // Calculate steps
+    float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+
+    // Run command
+    stepperX.move(stepsTrue);
+    while (stepperX.distanceToGo() > 0) {
+      //Serial.println(stepperX.distanceToGo() );
+      stepperX.run();        
+      if (digitalRead(X_LIM) == 0) {
+        stepperX.move(0.);  // Reset distanceToGo
+        
+        printStatusStr("angle_x", "limit reached");  // Print status
+        statusMessage = true;  // sent
+        status_ = false;
+        break;
+      }  
+    }
+
+    // Print status
+    if (statusMessage == false) {
+      //printStatusBool("angle_x", status_);
+      printStatusStr("angle_x", command); //temporary
+      statusMessage = true;
+    }
+  }
+
+  // Process command (y)
+  else if (subcommand.startsWith("y ")) {
+
+    // Calculate steps
+    float stepsTrue = a / Y_DEG_PER_STEP * Y_MICROSTEP * Y_DISTANCE_PER_STEP * Y_REDUCTION_RATIO;
+
+    // Run command
+    stepperY.move(stepsTrue);
+    stepperY.runToPosition();
+
+    // Print status
+    if (statusMessage == false) {
+      printStatusBool("angle_y", status_);
+      statusMessage = true;
+    }
+  }
+
+  // Unknown subcommand
+  else {
+    printStatusStr("unknown_command", "\"" + command + "\"");
+    printHelp("Usage: \"angle [axis:x,y] [value]\"");
+  }
+}
+
+
+
+
+
+
 int i = 0;
 void loop() {
 
   Serial.println(); Serial.println("========== NEW LOOP ==========");
    
-  // READ MESSAGES FROM SERIAL
+  // ================================
+  // Read messages from Serial
   while (Serial.available()) {
     delay(3);
-    char c = Serial.read();  //gets one byte from serial buffer
-    if (c == '\n'){
-      break;
-    }
-    command += c; //makes the string command
-    //Serial.println(command);
+    char c = Serial.read();  // Get one byte from serial buffer
+    if (c == '\n') { break; }
+    command += c;  // Build the string command
   }
-  
-  // Hard-coded command (will be received from SERIAL)
-  // String command = "calibrate"; // calibrate, step, …
-  
 
 
   // ================================
-  // Calibration
-  if (command.startsWith("calibrate")) {
-    calibrate(2000);
-    isCalibrated = true;
+  // Move to estimated zero position
+  if (command.startsWith("estimate_zero")) {    
+    moveRelative("angle x 90");
+    delay(100);
+    moveRelative("angle x 15");
+
+    if (digitalRead(X_LIM) != 0) {
+      printStatusBool ("estimate_zero", true);
+    }
+    else {
+      printStatusBool ("estimate_zero", false);
+    }
+  }
+
+
+  // ================================
+  // Set current position as new absolute zero
+  if (command.startsWith("set_zero")) {
+    stepperX.setCurrentPosition(0);
   }
 
 
@@ -203,74 +276,38 @@ void loop() {
   // Move (absolute motion)
   if (command.startsWith("move ")) {
 
+    // moveAbsolute(command);
+
     // Read axis and value
-    String subcommand = command.substring(5)
+    String subcommand = command.substring(5);
     long a = command.substring(6).toInt();  // RIGHT?
 
     // Process command (x)
-    if (subcommand.startsWith("x ") {
+    if (subcommand.startsWith("x ")) {
       stepperX.move(10000);
       stepperX.runToPosition();
     }
 
     // Process command (y)
-    else if (subcommand.startsWith("y ") {
+    else if (subcommand.startsWith("y ")) {
       
     }
   }
 
 
-
   // ================================
   // Angle (relative motion)
-  else if (command.startsWith("angle ")) {
-
-    // Read axis and value
-    String subcommand = command.substring(5)
-    float a = command.substring(6).toFloat();
-
-    // Process command (x)
-    if (subcommand.startsWith("x ") {
-
-      // Calculate steps
-      float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
-
-      // Run command
-      stepperX.move(stepsTrue);
-      stepperX.runToPosition();
-
-      // Print status
-      printStatus("angle_x", true);
-    }
-
-    // Process command (y)
-    else if (subcommand.startsWith("y ") {
-
-      // Calculate steps
-      float stepsTrue = a / Y_DEG_PER_STEP * Y_MICROSTEP * Y_DISTANCE_PER_STEP * Y_REDUCTION_RATIO;
-
-      // Run command
-      stepperY.move(stepsTrue);
-      stepperY.runToPosition();
-
-      // Print status
-      printStatus("angle_y", true);
-    }
-
-    // Unknown subcommand
-    else {
-      printStatus("unknown_command", "\"" + command + "\"");
-      printHelp("Usage: \"angle [axis:x,y] [value]\"");
-    }
+  if (command.startsWith("angle ")) {
+    moveRelative(command);
   }
   
  
   
-
+  /*
   else {
-    printStatus("unknown_command", "\"" + command + "\"");
+    printStatusStr("unknown_command", "\"" + command + "\"");
     printHelp("Available commands: angle, move");
-  }
+  }*/
 
 
 
