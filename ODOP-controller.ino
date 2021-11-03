@@ -42,7 +42,7 @@
 #define Y_ACCELERATION 500
 
 boolean motorsDisabled;
-boolean isCalibrated; // store calibration bool value
+boolean isCalibrated = false; // store calibration bool value
 
 
 AccelStepper stepperX(4, X_STP, X_DIR);
@@ -90,7 +90,6 @@ void updateLimits () {
   }
 }
 
-boolean isCalibrated = false;
 /*
  * FOR UNCALIBRATED DEVICE ONLY (isCalibrated == false)
  * before every movement: update xDirection
@@ -270,6 +269,7 @@ void loop() {
   // Set current position as new absolute zero
   if (command.startsWith("set_zero")) {
     stepperX.setCurrentPosition(0);
+    isCalibrated = true;
   }
 
 
