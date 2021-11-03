@@ -16,11 +16,16 @@
 #define Z_LIM       11
 
 
-#define DEG_PER_STEP 1.8
-#define DISTANCE_PER_STEP 4
-#define MICROSTEP 8
-#define REDUCTION_RATIO 27.
+#define X_DEG_PER_STEP 1.8
+#define X_DISTANCE_PER_STEP 4
+#define X_MICROSTEP 8
+#define X_REDUCTION_RATIO 27.
 
+
+#define X_MAX_SPEED 500
+#define X_ACCELERATION 500
+#define Y_MAX_SPEED 500
+#define Y_ACCELERATION 500
 
 boolean motorsDisabled;
 boolean isCalibrated; // store calibration bool value
@@ -34,7 +39,7 @@ void setup() {
   
   Serial.begin(9600);
 
-  stepperX.setMaxSpeed(500); // 0-10000, good value 100 // s1000a100
+  stepperX.setMaxSpeed(500); // 0-10000, good value 100 // s1000a100 too much
   stepperX .setAcceleration(500); // 0-5000, good value 200
 
   stepperY.setMaxSpeed(100); // 0-10000, good value 100
@@ -120,6 +125,20 @@ void getStatus () {
 }
 
 
+
+void updateStatus (String command, boolean status_) {
+  if (status == true) {
+    Serial.println(command + ": success");
+  }
+  else {
+    Serial.println(command + ": failure");
+  }
+}
+
+
+
+
+
 int i = 0;
 void loop() {
 
@@ -152,23 +171,54 @@ void loop() {
     getStatus();
   }
 
-  // Move (absolute motion)
-  if (command.startsWith("move")) { // "move "
-      //long a = command.substring(5).toInt();
-      // TODO
 
+  // -------------------------------- TODO
+  // Move (absolute motion)
+  if (command.startsWith("move ")) {
+
+    // Read axis and value
+    String subcommand = command.substring(5)
+    long a = command.substring(6).toInt();  // RIGHT?
+
+    // Process command (x)
+    if (subcommand.startsWith("x ") {
       stepperX.move(10000);
       stepperX.runToPosition();
+    }
+
+    // Process command (y)
+    else if (subcommand.startsWith("y ") {
+      
+    }
   }
 
+
+
+  // --------------------------------
   // Angle (relative motion)
   if (command.startsWith("angle ")) {
-    float a = command.substring(5).toFloat();
 
-    float stepsTrue = a / DEG_PER_STEP * MICROSTEP * DISTANCE_PER_STEP * REDUCTION_RATIO;
-    stepperX.move(stepsTrue);
-    stepperX.runToPosition();
-    Serial.println("finished");
+    // Read axis and value
+    String subcommand = command.substring(5)
+    float a = command.substring(6).toFloat();
+
+    // Process command (x)
+    if (subcommand.startsWith("x ") {
+      float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+      stepperX.move(stepsTrue);
+      stepperX.runToPosition();
+      Serial.println("finished");
+
+      // updateStatus("angle_x", true, 
+    }
+
+    // Process command (y)
+    else if (subcommand.startsWith("y ") {
+      float stepsTrue = a / X_DEG_PER_STEP * X_MICROSTEP * X_DISTANCE_PER_STEP * X_REDUCTION_RATIO;
+      stepperY.move(stepsTrue);
+      stepperY.runToPosition();
+      Serial.println("finished");
+    }
   }
   
  
