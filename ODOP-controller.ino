@@ -1,5 +1,9 @@
 #include <AccelStepper.h>
 
+/* TODO
+ *  Add end stops during movement
+ */
+
 //Direction pin
 #define X_DIR       5 
 #define Y_DIR       6
