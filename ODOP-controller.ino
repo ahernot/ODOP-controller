@@ -245,7 +245,9 @@ void moveRelative (String command) {
 }
 
 
-
+void moveAbsolute () {
+  
+}
 
 
 
@@ -304,20 +306,7 @@ void loop() {
   if (command.startsWith("move ")) {
 
     // moveAbsolute(command);
-
-    // Read axis and value
-    String subcommand = command.substring(5);
-    long a = command.substring(6).toInt();  // RIGHT?
-
-    // Process command (x)
-    if (subcommand.startsWith("x ")) {
-      stepperX.move(10000);
-      stepperX.runToPosition();
-    }
-
-    // Process command (y)
-    else if (subcommand.startsWith("y ")) {
-      
+    
     }
   }
 
