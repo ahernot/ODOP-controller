@@ -15,7 +15,7 @@
 #define Y_STP       3 
 #define Z_STP       4
 
-// End stops (https://forum.arduino.cc/t/using-end-stops-on-cnc-shield-design-for-gbrl/510231/2)
+// End stops
 #define X_LIM       9
 #define Y_LIM       10
 #define Z_LIM       11
