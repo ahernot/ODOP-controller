@@ -1,7 +1,8 @@
 #include <AccelStepper.h>
 
 /* TODO
- *  Add end stops during movement
+ *  enable_motors
+ *  disable_motors
  */
 
 //Direction pin
@@ -71,6 +72,17 @@ void setup() {
 
 
 
+float getCurrentPositionSteps(char axis) {
+  if (axis == 'x') { return stepperX.currentPosition() / X_DISTANCE_PER_STEP; }
+  else if (axis == 'y') { return stepperY.currentPosition() / Y_DISTANCE_PER_STEP; }
+  else { Serial.println("error"); return 0.; }
+}
+float getCurrentPositionDeg(char axis) {
+  if (axis == 'x') { return stepperX.currentPosition() / X_DISTANCE_PER_STEP / X_REDUCTION_RATIO / X_MICROSTEP * X_DEG_PER_STEP; }
+  else if (axis == 'y') { return stepperY.currentPosition() / Y_DISTANCE_PER_STEP / Y_REDUCTION_RATIO / Y_MICROSTEP * Y_DEG_PER_STEP; }
+  else { Serial.println("error"); return 0.; }
+}
+
 void printStatus () {
 
   if (motorsDisabled) {
@@ -84,28 +96,14 @@ void printStatus () {
   } else {
     Serial.println("System is not calibrated");
   }
-  
 
-  /*
-  Serial.print("Home1 position (steps): ");
-  Serial.println(home1Position);
-  Serial.print("Home1 position (degrees): ");
-  Serial.println(home1Position);
-  Serial.print("Home2 position (steps): ");
-  Serial.println(home2Position);
-  Serial.print("Home2 position (degrees): ");
-  Serial.println(ANGLE_RANGE);
-  Serial.print("Current position (steps): ");
-  Serial.println(stepper.currentPosition());
-  Serial.print("Current position (degrees): ");
-  float curPosSteps=(float)stepper.currentPosition();
-  float curPosDeg=ANGLE_RANGE*(curPosSteps/(float)(home2Position-home1Position));
-  Serial.println(curPosDeg);
-  reportLimits();
+  Serial.print("Current positions: ");
+  Serial.print("    X-axis (swing arm): "); Serial.print(getCurrentPositionSteps('x')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('x')); Serial.println(" deg");
+  Serial.print("    Y-axis (turntable): "); Serial.print(getCurrentPositionSteps('y')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('y')); Serial.println(" deg");
+
+
+  // reportLimits();
   Serial.println("Status ok");
-  */
-
-  
 }
 
 
@@ -254,7 +252,8 @@ void moveAbsolute () {
 int i = 0;
 void loop() {
 
-  Serial.println(); Serial.println("========== NEW LOOP =========="); Serial.println("isCalibrated: " + String(isCalibrated));
+  Serial.println(); Serial.println("========== NEW LOOP ==========");
+  Serial.println("isCalibrated: " + String(isCalibrated));
   Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
    
   // ================================
@@ -266,7 +265,7 @@ void loop() {
     command += c;  // Build the string command
   }
 
-  if (command != "") {
+  if ((command != "") && (STATUS_VERBOSE == true)) {
     Serial.println("Processing command \"" + command + "\"");
   }
 
@@ -304,13 +303,9 @@ void loop() {
   // ================================ TODO
   // Move (absolute motion)
   if (command.startsWith("move ")) {
-
     // moveAbsolute(command);
-    
-    }
   }
-
-
+    
   // ================================
   // Angle (relative motion)
   if (command.startsWith("angle ")) {
