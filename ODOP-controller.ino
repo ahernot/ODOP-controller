@@ -21,6 +21,8 @@
 
 
 /* TODO
+ *  add get_version
+ *  rename commands
  *  absolute motion
  *  enable_motors
  *  disable_motors
@@ -29,8 +31,10 @@
  *  digicam control
  *  remove loop delay of 2s
  *  weld 5V connections to 
+ *  ISSUE: have it be angle mod 360 for bottom stepper, or else will do one full un-rotation to revert 360° every time :/
  *  
  *  redo limit checking in moveRelative using updateLimits() and xLimMin, xLimMax
+ *  add docstrings
  */
 
 // Direction pins
@@ -67,7 +71,7 @@
 #define Y_ACCELERATION 500
 
 // Communication
-#define VERSION_STRING "Version 0.17"
+#define VERSION_STRING "Version 0.18"
 #define READY_MSG "Controller ready"
 #define BAUD_RATE 9600  // 38400
 
@@ -368,6 +372,12 @@ void loop() {
   }
 
   // ================================
+  // Get position (usage: "getpos x")
+  else if (command.startsWith("getpos")) {
+    // printStatusStr("position_" + command.substring(7), getCurrentPositionDeg(char(command.substring(7))) );
+  }
+
+  // ================================
   // Move to estimated zero position
   else if (command.startsWith("estimate_zero")) {    
     estimateZero();
@@ -384,6 +394,12 @@ void loop() {
   else if (command.startsWith("reset")) {
     setup();
     printStatusBool ("reset", true);
+  }
+
+  // ================================
+  // Print version
+  else if (command.startsWith("version") {
+    Serial.println(VERSION_STRING);
   }
 
   // ================================
