@@ -67,11 +67,13 @@
 #define Y_ACCELERATION 500
 
 // Communication
-#define VERSION_STRING "Version 0.16"
+#define VERSION_STRING "Version 0.17"
 #define READY_MSG "Controller ready"
 #define BAUD_RATE 9600  // 38400
-#define STATUS_VERBOSE true
-#define HELP_VERBOSE true
+
+boolean VERBOSE_STATUS = true;
+boolean VERBOSE_DEBUG = false;
+boolean VERBOSE_HELP = false;
 
 // Global variables
 String command;
@@ -128,7 +130,7 @@ float getCurrentPositionDeg(char axis) {
 
 
 void printStatusBool (String command, boolean status_) {
-  if (STATUS_VERBOSE == true) {
+  if (VERBOSE_STATUS == true) {
     if (status_ == true) {
       Serial.println(command + ": success");
     }
@@ -138,12 +140,12 @@ void printStatusBool (String command, boolean status_) {
   }
 }
 void printStatusStr (String command, String message) {
-  if (STATUS_VERBOSE == true) {
+  if (VERBOSE_STATUS == true) {
     Serial.println(command + ": " + message);
   }
 }
 void printHelp (String helpMessage) {
-  if (HELP_VERBOSE == true) {
+  if (VERBOSE_HELP == true) {
     Serial.println("    " + helpMessage);
   }
 }
@@ -303,13 +305,37 @@ void moveAbsolute () {
 }
 
 
+/*
+ * Estimate zero for calibration
+ */
+void estimateZero () {
+  moveRelative("angle x -90");
+  delay(1000);
+  moveRelative("angle x 15");
 
-int i = 0;
+  if (digitalRead(X_LIM) != 0) {
+    printStatusBool ("estimate_zero", true);
+  }
+  else {
+    printStatusBool ("estimate_zero", false);
+  }
+}
+void setZero () {
+  stepperX.setCurrentPosition(0);
+    isCalibrated = true;
+    printStatusBool ("set_zero", true);
+}
+
+
+
+
 void loop() {
 
-  //Serial.println(); Serial.println("========== NEW LOOP ==========");
-  //Serial.println("isCalibrated: " + String(isCalibrated));
-  //Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
+  if (VERBOSE_DEBUG == true) {
+    Serial.println(); Serial.println("========== NEW LOOP ==========");
+    Serial.println("isCalibrated: " + String(isCalibrated));
+    // Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
+  }
    
   // ================================
   // Read messages from Serial
@@ -319,42 +345,9 @@ void loop() {
     if (c == '\n') { break; }
     command += c;  // Build the string command
   }
-
-  if ((command != "") && (STATUS_VERBOSE == true)) {
+  if ((command != "") && (VERBOSE_DEBUG == true)) {
     //Serial.println("Processing command \"" + command + "\"");
   }
-
-  // ================================
-  // Move to estimated zero position
-  if (command.startsWith("estimate_zero")) {    
-    moveRelative("angle x -90");
-    delay(1000);
-    moveRelative("angle x 15");
-
-    if (digitalRead(X_LIM) != 0) {
-      printStatusBool ("estimate_zero", true);
-    }
-    else {
-      printStatusBool ("estimate_zero", false);
-    }
-  }
-
-  // ================================
-  // Move to estimated zero position
-  if (command.startsWith("reset")) {
-    setup();
-    printStatusBool ("reset", true);
-  }
-
-
-  // ================================
-  // Set current position as new absolute zero
-  if (command.startsWith("set_zero")) {
-    stepperX.setCurrentPosition(0);
-    isCalibrated = true;
-    printStatusBool ("set_zero", true);
-  }
-
 
   // ================================
   // Status
@@ -362,33 +355,54 @@ void loop() {
     printStatus();
   }
 
-  // ================================ TODO
-  // Move (absolute motion)
-  if (command.startsWith("move ")) {
-    // moveAbsolute(command);
-  }
-    
   // ================================
   // Angle (relative motion)
-  if (command.startsWith("angle ")) {
+  else if (command.startsWith("angle")) {
     moveRelative(command);
   }
-  
+
+  // ================================ TODO
+  // Move (absolute motion)
+  else if (command.startsWith("move")) {
+    // moveAbsolute(command);
+  }
+
+  // ================================
+  // Move to estimated zero position
+  else if (command.startsWith("estimate_zero")) {    
+    estimateZero();
+  }
+
+  // ================================
+  // Set current position as new absolute zero
+  else if (command.startsWith("set_zero")) {
+    setZero();
+  }
+
+  // ================================
+  // Move to estimated zero position
+  else if (command.startsWith("reset")) {
+    setup();
+    printStatusBool ("reset", true);
+  }
+
+  // ================================
+  else if (command.startsWith("debug")) {
+    if (VERBOSE_DEBUG) { VERBOSE_DEBUG = false; }
+    else { VERBOSE_DEBUG = true; }
+  }
+
   // ================================
   // Unrecognised command
-  else {
+  else if (command != "") {
     printStatusStr("Unknown command", "\"" + command + "\"");
     printHelp("Available commands: angle, move");
   }
 
 
-
   // ================================
   // Reset command variable
   if (command != "") {
-    command = ""; 
+    command = "";
   }
-
-  //delay(500);
-  i++;
 }
