@@ -21,6 +21,7 @@
 
 
 /* TODO
+ *  absolute motion
  *  enable_motors
  *  disable_motors
  *  y microstepping
@@ -47,39 +48,39 @@
 #define Y_LIM       10
 // #define Z_LIM    11
 
-// X-axis parameters
+// X-axis (swing) parameters
 #define X_DEG_PER_STEP 1.8
 #define X_DISTANCE_PER_STEP 4
 #define X_MICROSTEP 8
 #define X_REDUCTION_RATIO 27.
 
-// Y-axis parameters
+// Y-axis (turntable) parameters
 #define Y_DEG_PER_STEP 1.8
 #define Y_DISTANCE_PER_STEP 4
-#define Y_MICROSTEP 8
+#define Y_MICROSTEP 16
 #define Y_REDUCTION_RATIO 1.
 
 // Motor parameters
 #define X_MAX_SPEED 500
 #define X_ACCELERATION 500
-#define Y_MAX_SPEED 500
+#define Y_MAX_SPEED 250
 #define Y_ACCELERATION 500
 
 // Communication
-#define VERSION_STRING "Version 0.14"
+#define VERSION_STRING "Version 0.16"
+#define READY_MSG "Controller ready"
 #define BAUD_RATE 9600  // 38400
 #define STATUS_VERBOSE true
 #define HELP_VERBOSE true
 
+// Global variables
+String command;
 boolean motorsDisabled;
-boolean isCalibrated = false;
-
-// Limits
+boolean isCalibrated;
 boolean xLimMin;  // X-axis minimum
 boolean xLimMax;  // X-axis maximum
-String command;
 
-// Initialise stepper motors
+// Stepper motors
 AccelStepper stepperX(4, X_STP, X_DIR);  // X-axis (swing)
 AccelStepper stepperY(4, Y_STP, Y_DIR);  // Y-axis (turntable)
 
@@ -92,9 +93,12 @@ void setup() {
   Serial.begin(BAUD_RATE);
   Serial.println(VERSION_STRING);
 
-  // Set up limit pins
+  // Initialise limit pins
   pinMode (X_LIM, INPUT);  // minimum (X-axis)
   pinMode (Y_LIM, INPUT);  // maximum (X-axis)
+
+  // Reset calibration flag
+  isCalibrated = false;
 
   // X-axis (swing)
   stepperX.setMaxSpeed(X_MAX_SPEED);  // 0-10000, good value 100 // s1000a100 too much
@@ -104,6 +108,8 @@ void setup() {
   stepperY.setMaxSpeed(Y_MAX_SPEED);  // 0-10000, good value 100
   stepperY .setAcceleration(Y_ACCELERATION);  // 0-5000, good value 200
 
+  // Print status
+  Serial.println(READY_MSG);
 }
 
 
@@ -118,36 +124,6 @@ float getCurrentPositionDeg(char axis) {
   if (axis == 'x') { return stepperX.currentPosition() / X_DISTANCE_PER_STEP / X_REDUCTION_RATIO / X_MICROSTEP * X_DEG_PER_STEP; }
   else if (axis == 'y') { return stepperY.currentPosition() / Y_DISTANCE_PER_STEP / Y_REDUCTION_RATIO / Y_MICROSTEP * Y_DEG_PER_STEP; }
   else { Serial.println("error"); return 0.; }
-}
-
-
-
-void printStatus () {
-
-  if (motorsDisabled) {
-    Serial.println("Motors are disabled");
-  } else {
-    Serial.println("Motors are enabled");
-  }
-  
-  if (isCalibrated) {
-    Serial.println("System is calibrated");
-  } else {
-    Serial.println("System is not calibrated");
-  }
-
-  
-  Serial.println("Current positions: ");
-  if (isCalibrated) {
-    Serial.print("    X-axis (swing arm): "); Serial.print(getCurrentPositionSteps('x')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('x')); Serial.println(" deg");
-    Serial.print("    Y-axis (turntable): "); Serial.print(getCurrentPositionSteps('y')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('y')); Serial.println(" deg");
-  } else {
-    Serial.println("Absolute positions unavailable");
-  }
-
-
-  // reportLimits();
-  Serial.println("Status ok");
 }
 
 
@@ -173,20 +149,47 @@ void printHelp (String helpMessage) {
 }
 
 
+void printStatus () {
+
+  if (motorsDisabled) {
+    Serial.println("Motors are disabled");
+  } else {
+    Serial.println("Motors are enabled");
+  }
+  
+  if (isCalibrated) {
+    Serial.println("System is calibrated");
+  } else {
+    Serial.println("System is not calibrated");
+  }
+
+  if (isCalibrated) {
+    Serial.println("Current positions: ");
+    Serial.print("    X-axis (swing arm): "); Serial.print(getCurrentPositionSteps('x')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('x')); Serial.println(" deg");
+    Serial.print("    Y-axis (turntable): "); Serial.print(getCurrentPositionSteps('y')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('y')); Serial.println(" deg");
+  } else {
+    Serial.println("Absolute positions unavailable");
+  }
+
+
+  // reportLimits();
+  Serial.println("Status ok");
+}
+
 
 
 /**
  * Update global limit variables (function needs to be called to refresh xLimMin and xLimMax before they are used)
  */
 void updateLimits () {
-  // Minimum (0 for switched pressed)
+  // Minimum (0 for switch pressed)
   if (digitalRead(X_LIM) == 0) {
     xLimMin = true;
   } else {
     xLimMin = false;
   }
 
-  // Maximum (0 for switched pressed)
+  // Maximum (0 for switch pressed)
   if (digitalRead(Y_LIM) == 0) {
     xLimMax = true;
   } else {
@@ -223,6 +226,7 @@ void moveRelative (String command) {
       }
       boolean requestStop = false;
 
+      /*
       // Check end stop switch
       if (isCalibrated == true) {
         if (digitalRead(X_LIM) == 0) {
@@ -249,6 +253,7 @@ void moveRelative (String command) {
           requestStop = true;
         }
       }
+      */
 
       // Process stop request
       if (requestStop == true) {
@@ -334,12 +339,20 @@ void loop() {
     }
   }
 
+  // ================================
+  // Move to estimated zero position
+  if (command.startsWith("reset")) {
+    setup();
+    printStatusBool ("reset", true);
+  }
+
 
   // ================================
   // Set current position as new absolute zero
   if (command.startsWith("set_zero")) {
     stepperX.setCurrentPosition(0);
     isCalibrated = true;
+    printStatusBool ("set_zero", true);
   }
 
 
@@ -348,7 +361,6 @@ void loop() {
   if (command.startsWith("status")) {
     printStatus();
   }
-
 
   // ================================ TODO
   // Move (absolute motion)
@@ -362,13 +374,12 @@ void loop() {
     moveRelative(command);
   }
   
- 
-  
-  /*
+  // ================================
+  // Unrecognised command
   else {
-    printStatusStr("unknown_command", "\"" + command + "\"");
+    printStatusStr("Unknown command", "\"" + command + "\"");
     printHelp("Available commands: angle, move");
-  }*/
+  }
 
 
 
