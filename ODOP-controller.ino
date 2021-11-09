@@ -1,28 +1,51 @@
+
+
+
+/* ODOP controller
+ Copyright (C) 2021 Fusang Wang & Anatole Hernot, Mines Paris (PSL Research University). All rights reserved.
+
+ This software may be distributed and modified under the terms of the GNU
+ General Public License version 2 (GPL2) as published by the Free Software
+ Foundation and appearing in the file GPL2.TXT included in the packaging of
+ this file. Please note that GPL2 Section 2[b] requires that all works based
+ on this software must also be made publicly available under the terms of
+ the GPL2 ("Copyleft").
+
+ github.com/Fusang-Wang
+ github.com/ahernot
+ */
+
+
 #include <AccelStepper.h>
+#include <SoftwareSerial.h>
+
 
 /* TODO
  *  enable_motors
  *  disable_motors
+ *  y microstepping
+ *  impedance calibration of drivers
+ *  digicam control
+ *  remove loop delay of 2s
+ *  weld 5V connections to 
+ *  
+ *  redo limit checking in moveRelative using updateLimits() and xLimMin, xLimMax
  */
 
-//Direction pin
+// Direction pins
 #define X_DIR       5 
 #define Y_DIR       6
-#define Z_DIR       7
+// #define Z_DIR    7
 
-// Step pin
+// Step pins
 #define X_STP       2
 #define Y_STP       3 
-#define Z_STP       4
+// #define Z_STP    4
 
-// End stops
+// End stop pins
 #define X_LIM       9
 #define Y_LIM       10
-#define Z_LIM       11
-
-
-#define STATUS_VERBOSE true
-#define HELP_VERBOSE true
+// #define Z_LIM    11
 
 // X-axis parameters
 #define X_DEG_PER_STEP 1.8
@@ -34,7 +57,7 @@
 #define Y_DEG_PER_STEP 1.8
 #define Y_DISTANCE_PER_STEP 4
 #define Y_MICROSTEP 8
-#define Y_REDUCTION_RATIO 27.
+#define Y_REDUCTION_RATIO 1.
 
 // Motor parameters
 #define X_MAX_SPEED 500
@@ -42,30 +65,44 @@
 #define Y_MAX_SPEED 500
 #define Y_ACCELERATION 500
 
+// Communication
+#define VERSION_STRING "Version 0.14"
+#define BAUD_RATE 9600  // 38400
+#define STATUS_VERBOSE true
+#define HELP_VERBOSE true
+
 boolean motorsDisabled;
-boolean isCalibrated = false; // store calibration bool value
+boolean isCalibrated = false;
+
+// Limits
+boolean xLimMin;  // X-axis minimum
+boolean xLimMax;  // X-axis maximum
+String command;
+
+// Initialise stepper motors
+AccelStepper stepperX(4, X_STP, X_DIR);  // X-axis (swing)
+AccelStepper stepperY(4, Y_STP, Y_DIR);  // Y-axis (turntable)
 
 
-// Only used for uncalibrated motion
-boolean xLimMin = false;
-boolean xLimMax = false;
 
-
-AccelStepper stepperX(4, X_STP, X_DIR);
-AccelStepper stepperY(4, Y_STP, Y_DIR);
-String command = ""; 
 
 void setup() {
-  
-  Serial.begin(9600);
 
-  pinMode (X_LIM, INPUT);
+  // Begin serial communication
+  Serial.begin(BAUD_RATE);
+  Serial.println(VERSION_STRING);
 
-  stepperX.setMaxSpeed(X_MAX_SPEED); // 0-10000, good value 100 // s1000a100 too much
-  stepperX .setAcceleration(X_ACCELERATION); // 0-5000, good value 200
+  // Set up limit pins
+  pinMode (X_LIM, INPUT);  // minimum (X-axis)
+  pinMode (Y_LIM, INPUT);  // maximum (X-axis)
 
-  stepperY.setMaxSpeed(Y_MAX_SPEED); // 0-10000, good value 100
-  stepperY .setAcceleration(Y_ACCELERATION); // 0-5000, good value 200
+  // X-axis (swing)
+  stepperX.setMaxSpeed(X_MAX_SPEED);  // 0-10000, good value 100 // s1000a100 too much
+  stepperX .setAcceleration(X_ACCELERATION);  // 0-5000, good value 200
+
+  // Y-axis (turntable)
+  stepperY.setMaxSpeed(Y_MAX_SPEED);  // 0-10000, good value 100
+  stepperY .setAcceleration(Y_ACCELERATION);  // 0-5000, good value 200
 
 }
 
@@ -83,6 +120,8 @@ float getCurrentPositionDeg(char axis) {
   else { Serial.println("error"); return 0.; }
 }
 
+
+
 void printStatus () {
 
   if (motorsDisabled) {
@@ -97,9 +136,14 @@ void printStatus () {
     Serial.println("System is not calibrated");
   }
 
-  Serial.print("Current positions: ");
-  Serial.print("    X-axis (swing arm): "); Serial.print(getCurrentPositionSteps('x')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('x')); Serial.println(" deg");
-  Serial.print("    Y-axis (turntable): "); Serial.print(getCurrentPositionSteps('y')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('y')); Serial.println(" deg");
+  
+  Serial.println("Current positions: ");
+  if (isCalibrated) {
+    Serial.print("    X-axis (swing arm): "); Serial.print(getCurrentPositionSteps('x')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('x')); Serial.println(" deg");
+    Serial.print("    Y-axis (turntable): "); Serial.print(getCurrentPositionSteps('y')); Serial.print(" steps / "); Serial.print(getCurrentPositionDeg('y')); Serial.println(" deg");
+  } else {
+    Serial.println("Absolute positions unavailable");
+  }
 
 
   // reportLimits();
@@ -130,17 +174,23 @@ void printHelp (String helpMessage) {
 
 
 
+
+/**
+ * Update global limit variables (function needs to be called to refresh xLimMin and xLimMax before they are used)
+ */
 void updateLimits () {
+  // Minimum (0 for switched pressed)
   if (digitalRead(X_LIM) == 0) {
-    if (stepperX.distanceToGo() > 0) {
-      xLimMin = false; xLimMax = true;
-    }
-    else if (stepperX.distanceToGo() < 0) {
-      xLimMin = true; xLimMax = false;
-    }
-    else {
-      xLimMin = false; xLimMax = false;
-    }
+    xLimMin = true;
+  } else {
+    xLimMin = false;
+  }
+
+  // Maximum (0 for switched pressed)
+  if (digitalRead(Y_LIM) == 0) {
+    xLimMax = true;
+  } else {
+    xLimMax = false;
   }
 }
 
@@ -191,11 +241,11 @@ void moveRelative (String command) {
 
         // update xLimMin = false; xLimMax = true; ??
         if (xLimMax == true && stepperX.distanceToGo() > 0) {  // max and increasing
-          Serial.println("max and increasing, stopping");
+          //Serial.println("max and increasing, stopping");
           requestStop = true;
         }
         else if (xLimMin == true && stepperX.distanceToGo() < 0) {  // min and decreasing
-          Serial.println("min and decreasing, stopping");
+          //Serial.println("min and decreasing, stopping");
           requestStop = true;
         }
       }
@@ -203,7 +253,7 @@ void moveRelative (String command) {
       // Process stop request
       if (requestStop == true) {
         stepperX.move(0.);  // Reset distanceToGo
-        printStatusStr("angle_x", "limit reached");  // Print status
+        //printStatusStr("angle_x", "limit reached");  // Print status
         
         statusMessage = true;  // sent
         status_ = false;
@@ -252,9 +302,9 @@ void moveAbsolute () {
 int i = 0;
 void loop() {
 
-  Serial.println(); Serial.println("========== NEW LOOP ==========");
-  Serial.println("isCalibrated: " + String(isCalibrated));
-  Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
+  //Serial.println(); Serial.println("========== NEW LOOP ==========");
+  //Serial.println("isCalibrated: " + String(isCalibrated));
+  //Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
    
   // ================================
   // Read messages from Serial
@@ -266,7 +316,7 @@ void loop() {
   }
 
   if ((command != "") && (STATUS_VERBOSE == true)) {
-    Serial.println("Processing command \"" + command + "\"");
+    //Serial.println("Processing command \"" + command + "\"");
   }
 
   // ================================
@@ -328,6 +378,6 @@ void loop() {
     command = ""; 
   }
 
-  delay(2000);
+  //delay(500);
   i++;
 }
