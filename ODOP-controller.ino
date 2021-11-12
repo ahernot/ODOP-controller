@@ -1,6 +1,3 @@
-
-
-
 /* ODOP controller
  Copyright (C) 2021 Fusang Wang & Anatole Hernot, Mines Paris (PSL Research University). All rights reserved.
 
@@ -204,6 +201,9 @@ void updateLimits () {
   } else {
     xLimMax = false;
   }
+
+  //xLimMin = false;
+  //xLimMax = false;
 }
 
 
@@ -287,7 +287,7 @@ void moveRel (String command) {
   // Unknown subcommand
   else {
     printStatusStr("unknown_command", "\"" + command + "\"");
-    printHelp("Usage: \"angle [axis:x,y] [value]\"");
+    printHelp("Usage: \"move_rel [axis:x,y] [value]\"");
   }
 }
 
@@ -373,7 +373,7 @@ void moveAbs (String command) {
   // Unknown subcommand
   else {
     printStatusStr("unknown_command", "\"" + command + "\"");
-    printHelp("Usage: \"angle [axis:x,y] [value]\"");
+    printHelp("Usage: \"move_abs [axis:x,y] [value]\"");
   }
 }
 
@@ -382,9 +382,9 @@ void moveAbs (String command) {
  * Estimate zero for calibration
  */
 void estimateZero () {
-  moveRel("angle x -90");
+  moveRel("move_rel x -200");
   delay(1000);
-  moveRel("angle x 15");
+  moveRel("move_rel x 15");
 
   if (digitalRead(X_LIM) != 0) {
     printStatusBool ("estimate_zero", true);
