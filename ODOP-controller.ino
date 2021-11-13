@@ -18,21 +18,8 @@
 
 
 /* TODO
- *  add get_version
- *  rename commands
- *  absolute motion
- *  enable_motors
- *  disable_motors
- *  y microstepping
- *  impedance calibration of drivers
- *  digicam control
- *  weld 5V connections to 
- *  ISSUE: have it be angle mod 360 for bottom stepper, or else will do one full un-rotation to revert 360° every time :/
- *  
- *  redo limit checking in moveRelative using updateLimits() and xLimMin, xLimMax
+ *  impedance calibration of drivers *
  *  add docstrings
- *  
- *  Document that Y channel is used for xLimMax
  */
 
 // Direction pins
@@ -69,7 +56,7 @@
 #define Y_ACCELERATION 500
 
 // Communication
-#define VERSION_STRING "Version 0.25"
+#define VERSION_STRING "Version 0.22"
 #define READY_MSG "Controller ready"
 #define BAUD_RATE 9600  // 38400
 
@@ -155,12 +142,13 @@ void printHelp (String helpMessage) {
 
 
 void printStatus () {
-
+  /*
   if (motorsDisabled) {
     Serial.println("Motors are disabled");
   } else {
     Serial.println("Motors are enabled");
   }
+  */
   
   if (isCalibrated) {
     Serial.println("System is calibrated");
@@ -177,7 +165,6 @@ void printStatus () {
   }
 
 
-  // reportLimits();
   Serial.println("Status ok");
 }
 
@@ -202,8 +189,8 @@ void updateLimits () {
     xLimMax = false;
   }
 
-  //xLimMin = false;
-  //xLimMax = false;
+  xLimMin = false;
+  xLimMax = false;
 }
 
 
