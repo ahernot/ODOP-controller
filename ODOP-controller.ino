@@ -56,7 +56,7 @@
 #define Y_ACCELERATION 500
 
 // Communication
-#define VERSION_STRING "Version 0.22"
+#define VERSION_STRING "Version 1.0.0"
 #define READY_MSG "Controller ready"
 #define BAUD_RATE 9600  // 38400
 
