@@ -69,7 +69,7 @@ String command;
 boolean motorsDisabled;
 boolean isCalibrated;
 boolean xLimMin;  // X-axis minimum
-boolean xLimMax;  // X-axis maximum
+boolean xLimMax;  // X-axis maximum (using Y_LIM pin)
 
 // Stepper motors
 AccelStepper stepperX(4, X_STP, X_DIR);  // X-axis (swing)
@@ -188,12 +188,12 @@ void updateLimits () {
   } else {
     xLimMax = false;
   }
-
-  xLimMin = false;
-  xLimMax = false;
 }
 
 
+/**
+ * Relative motion
+ */
 void moveRel (String command) {
   
   // Flags
@@ -279,6 +279,9 @@ void moveRel (String command) {
 }
 
 
+/**
+ * Absolute motion
+ */
 void moveAbs (String command) {
 
   // Flags
@@ -366,7 +369,7 @@ void moveAbs (String command) {
 
 
 /*
- * Estimate zero for calibration
+ * Estimate zero for calibration (legacy function)
  */
 void estimateZero () {
   moveRel("move_rel x -200");
@@ -380,6 +383,8 @@ void estimateZero () {
     printStatusBool ("estimate_zero", false);
   }
 }
+
+
 void setZero () {
   stepperX.setCurrentPosition(0);
   isCalibrated = true;
@@ -394,7 +399,6 @@ void loop() {
   if (VERBOSE_DEBUG == true) {
     Serial.println(); Serial.println("========== NEW LOOP ==========");
     Serial.println("isCalibrated: " + String(isCalibrated));
-    // Serial.println("min=" + String(xLimMin) + ", max=" + String(xLimMax));
   }
 
   // ================================
